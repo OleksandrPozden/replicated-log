@@ -1,0 +1,23 @@
+syntax = "proto3";
+
+package logger;
+
+service Logger {
+    rpc SaveMessage (LogMessageRequest) returns (LogMessageReply) {}
+
+    rpc GetAllMessages (GetListMessageRequest) returns (ListLogMessagesReply) {}
+}
+
+message LogMessageRequest {
+    string message = 1;
+}
+
+message GetListMessageRequest {}
+
+message LogMessageReply {
+    string result = 1;
+}
+
+message ListLogMessagesReply {
+    repeated string messages = 1;
+}

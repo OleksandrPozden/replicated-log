@@ -1,0 +1,19 @@
+version: '3'  
+
+networks:
+  replicated-log:
+    driver: bridge
+
+services:
+  master:
+    build: .
+    ports:
+      - "8000:8000"  
+    networks:
+      - replicated-log
+
+  replica:
+    build: .  
+    command: ["python", "replica_server.py"]  
+    networks:
+      - replicated-log
