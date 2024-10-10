@@ -44,6 +44,9 @@ class ReplicaContainer(metaclass=Singleton):
     def list(self):
         return self.replicas
     
+    def count(self):
+        return len(self.replicas)
+    
     def refresh(self):
         try:
             for host in socket.gethostbyname_ex(REPLICA_SERVICE_NAME)[2]:
@@ -85,4 +88,4 @@ def list_replicas():
     
 @app.get("/")
 def root():
-    return {"message": "Runing replicas"}
+    return {"message": f"Runing {ReplicaContainer().count()} replicas"}
