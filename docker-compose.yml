@@ -15,5 +15,7 @@ services:
   replica:
     build: .  
     command: ["python", "replica_server.py"]  
+    ports:
+      - "50051"
     networks:
       - replicated-log
