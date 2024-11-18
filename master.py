@@ -1,24 +1,24 @@
 from storage import InMemoryStorage
-from pydantic import BaseModel
 from fastapi import FastAPI
 from fastapi import status
 from utils import Singleton
+from models import RESTLog
+from models import Log
+from time import sleep
 import logger_pb2_grpc
 import logger_pb2
 import logging
+import asyncio
 import grpc
+
 import socket
 
 
 logging.getLogger().setLevel(logging.INFO)
 
-local_storage = InMemoryStorage()
-
 REPLICA_SERVICE_NAME = "replica"
 
-class Log(BaseModel):
-    message: str
-
+local_storage = InMemoryStorage()
 app = FastAPI()
 
 class Replica:
@@ -56,16 +56,19 @@ class ReplicaContainer(metaclass=Singleton):
         except socket.gaierror:
             self.replicas = []
 
+async def save_message(replica: Replica, message: str):
+    channel = grpc.aio.insecure_channel(f'{replica.host}:{replica.port}')
+    stub = logger_pb2_grpc.LoggerStub(channel)
+    response = await stub.SaveMessage(logger_pb2.LogMessageRequest(message=message))
+    return response
+    
 @app.post("/log/create", status_code=status.HTTP_201_CREATED)
-def create_log(log: Log):
-    responses = []
+async def create_log(log: RESTLog):
     local_storage.save(log.message)
-    for replica in ReplicaContainer():
-        with grpc.insecure_channel(f'{replica.host}:{replica.port}') as channel:
-            stub = logger_pb2_grpc.LoggerStub(channel)
-            response = stub.SaveMessage(logger_pb2.LogMessageRequest(message=log.message))
-            responses.append(response)
-    return {"result": [response.result for response in responses]}
+    replicas = [Replica(1,"name1", "localhost", 49678), Replica(2,"name2", "localhost", 49677)]
+    tasks = [asyncio.create_task(save_message(replica, log.message)) for replica in ReplicaContainer()] 
+    completed_tasks, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
+    return {"result": [task.result().result for task in list(completed_tasks)]}
     
 @app.get("/log/list")
 def list_log():
@@ -75,10 +78,10 @@ def list_log():
 def list_replica_log(replica_id: int):
     for replica in ReplicaContainer():
         if replica.id == replica_id:
-            with grpc.insecure_channel(f'{replica.host}:{replica.port}') as channel:
-                stub = logger_pb2_grpc.LoggerStub(channel)
-                response = stub.GetAllMessages(logger_pb2.GetListMessageRequest())
-                return {"result": list(response.messages)}
+            channel = grpc.insecure_channel(f'{replica.host}:{replica.port}')
+            stub = logger_pb2_grpc.LoggerStub(channel)
+            response = stub.GetAllMessages(logger_pb2.GetListMessageRequest())
+            return {"result": list(response.messages)}
     return {"error": "Replica not found"}
     
 @app.get("/replica/list")
