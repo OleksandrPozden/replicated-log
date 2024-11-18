@@ -65,7 +65,6 @@ async def save_message(replica: Replica, message: str):
 @app.post("/log/create", status_code=status.HTTP_201_CREATED)
 async def create_log(log: RESTLog):
     local_storage.save(log.message)
-    replicas = [Replica(1,"name1", "localhost", 49678), Replica(2,"name2", "localhost", 49677)]
     tasks = [asyncio.create_task(save_message(replica, log.message)) for replica in ReplicaContainer()] 
     completed_tasks, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
     return {"result": [task.result().result for task in list(completed_tasks)]}
