@@ -12,7 +12,7 @@ service Logger {
 
 message LogMessageRequest {
     string message = 1;
-    google.protobuf.Timestamp created_at = 3
+    google.protobuf.Timestamp created_at = 2;
 }
 
 message GetListMessageRequest {}

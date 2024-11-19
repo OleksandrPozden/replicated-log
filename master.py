@@ -1,3 +1,4 @@
+from fastapi import BackgroundTasks
 from storage import InMemoryStorage
 from fastapi import FastAPI
 from fastapi import status
@@ -31,7 +32,7 @@ class Replica:
 class ReplicaContainer(metaclass=Singleton):
 
     def __init__(self):
-        self.replicas = []
+        self.replicas = []# or [Replica(id=1, name="name1", host="localhost", port=50051)]
         self.refresh()
 
     def __iter__(self):
@@ -54,20 +55,31 @@ class ReplicaContainer(metaclass=Singleton):
                 replica_id = int(name.split('replica-')[-1])
                 self.add(Replica(replica_id, name, host, 50051))
         except socket.gaierror:
-            self.replicas = []
+            self.replicas = [] or [Replica(id=1, name="name1", host="localhost", port=50051)]
 
-async def save_message(replica: Replica, message: str):
+async def save_message(replica: Replica, log: Log):
     channel = grpc.aio.insecure_channel(f'{replica.host}:{replica.port}')
     stub = logger_pb2_grpc.LoggerStub(channel)
-    response = await stub.SaveMessage(logger_pb2.LogMessageRequest(message=message))
+    response = await stub.SaveMessage(logger_pb2.LogMessageRequest(message=log.message, created_at=log.created_at))
     return response
     
 @app.post("/log/create", status_code=status.HTTP_201_CREATED)
-async def create_log(log: RESTLog):
-    local_storage.save(log.message)
-    tasks = [asyncio.create_task(save_message(replica, log.message)) for replica in ReplicaContainer()] 
-    completed_tasks, _ = await asyncio.wait(tasks, return_when=asyncio.ALL_COMPLETED)
-    return {"result": [task.result().result for task in list(completed_tasks)]}
+async def create_log(input_log: RESTLog, background_tasks: BackgroundTasks):
+    log = Log(message=input_log.message)
+    local_storage.save(log)
+    tasks = [asyncio.create_task(save_message(replica, log)) for replica in ReplicaContainer()]
+    if input_log.write_concern == 1:
+        background_tasks.add_task(asyncio.gather, *tasks)
+        return {"result": f"Data succesfully saved with write concern: {input_log.write_concern}"}
+    
+    completed_tasks = []
+    for task in asyncio.as_completed(tasks):
+        finished_task = await task
+        completed_tasks.append(finished_task)
+        if len(completed_tasks) > input_log.write_concern:
+            remaining_tasks = [t for t in tasks if not t.done()]
+            background_tasks.add_task(asyncio.gather, *remaining_tasks)
+            return {"result": f"Data succesfully saved with write concern: {input_log.write_concern}"}
     
 @app.get("/log/list")
 def list_log():

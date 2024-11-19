@@ -3,6 +3,7 @@ from concurrent import futures
 from random import random
 from time import sleep
 import logger_pb2_grpc
+from models import Log
 import logger_pb2
 import logging
 import grpc
@@ -12,10 +13,11 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 class LoggerServicer(logger_pb2_grpc.LoggerServicer):
     def SaveMessage(self, request, context):
+        log = Log(message=request.message, created_at=request.created_at.ToDatetime())
         logging.info("Saving a message...")
-        rand_time = round(random()*10)
+        rand_time = round(random()*20)
         sleep(rand_time)
-        InMemoryStorage().save(request.message)
+        InMemoryStorage().save(log)
         logging.info(f"Request processed in {rand_time}s")
         logging.info(f"Current state is: {InMemoryStorage().list()}")
         return logger_pb2.LogMessageReply(result="201 OK: Sucessfully saved!")
