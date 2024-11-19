@@ -1,6 +1,5 @@
 """storage.py"""
 from utils import Singleton
-import logging
 
 class InMemoryStorage(metaclass=Singleton):
     def __init__(self):
