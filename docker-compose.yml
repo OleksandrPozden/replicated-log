@@ -11,6 +11,8 @@ services:
       - "8000:8000"  
     networks:
       - replicated-log
+    volumes:
+      - ./:/app
 
   replica:
     build: .  
@@ -19,3 +21,5 @@ services:
       - "50051"
     networks:
       - replicated-log
+    volumes:
+      - ./:/app

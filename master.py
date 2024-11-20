@@ -1,17 +1,16 @@
 from fastapi import BackgroundTasks
 from storage import InMemoryStorage
+from datetime import datetime
 from fastapi import FastAPI
 from fastapi import status
 from utils import Singleton
 from models import RESTLog
 from models import Log
-from time import sleep
 import logger_pb2_grpc
 import logger_pb2
 import logging
 import asyncio
 import grpc
-
 import socket
 
 
@@ -62,10 +61,18 @@ async def save_message(replica: Replica, log: Log):
     stub = logger_pb2_grpc.LoggerStub(channel)
     response = await stub.SaveMessage(logger_pb2.LogMessageRequest(message=log.message, created_at=log.created_at))
     return response
+
+async def write_to_remaining_replicas(replica_tasks):
+    try:
+        await asyncio.gather(*replica_tasks)
+    except RuntimeError:
+        # usually arises when no tasks to await. rare case but possible
+        pass
     
 @app.post("/log/create", status_code=status.HTTP_201_CREATED)
 async def create_log(input_log: RESTLog, background_tasks: BackgroundTasks):
-    log = Log(message=input_log.message)
+    message_inserted_at = datetime.now()
+    log = Log(message=input_log.message, created_at=message_inserted_at)
     local_storage.save(log)
     tasks = [asyncio.create_task(save_message(replica, log)) for replica in ReplicaContainer()]
     if input_log.write_concern == 1:
@@ -76,7 +83,7 @@ async def create_log(input_log: RESTLog, background_tasks: BackgroundTasks):
     for task in asyncio.as_completed(tasks):
         finished_task = await task
         completed_tasks.append(finished_task)
-        if len(completed_tasks) > input_log.write_concern:
+        if len(completed_tasks) > input_log.write_concern - 1:
             remaining_tasks = [t for t in tasks if not t.done()]
             background_tasks.add_task(asyncio.gather, *remaining_tasks)
             return {"result": f"Data succesfully saved with write concern: {input_log.write_concern}"}

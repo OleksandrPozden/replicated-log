@@ -18,6 +18,7 @@ class LoggerServicer(logger_pb2_grpc.LoggerServicer):
         rand_time = round(random()*20)
         sleep(rand_time)
         InMemoryStorage().save(log)
+        InMemoryStorage().save(log)
         logging.info(f"Request processed in {rand_time}s")
         logging.info(f"Current state is: {InMemoryStorage().list()}")
         return logger_pb2.LogMessageReply(result="201 OK: Sucessfully saved!")
